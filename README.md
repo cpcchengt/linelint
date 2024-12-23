@@ -13,3 +13,14 @@ Ensures files end with a newline (`\n`).
 Flags trailing spaces at the end of lines.
 
 **Fix:** Remove trailing spaces.
+
+## Cli Usage Example(exclude dir or file) 
+```bash
+./cli check --exclude 'linelint/src,linelint-cli/src/main.rs'
+
+./cli format --exclude 'linelint/src,linelint-cli/src/main.rs'
+
+./cli check -e 'linelint/src/rule,linelint-cli'
+
+./cli format -e 'linelint/src/rule,linelint-cli'
+```

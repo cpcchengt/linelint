@@ -2,7 +2,7 @@ use crate::config::Config;
 use crate::issue::Issue;
 use crate::line::LineEnding;
 use ignore::WalkBuilder;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::{fs, io};
 
 pub struct Linter<'a> {
@@ -17,10 +17,11 @@ impl<'a> Linter<'a> {
     pub fn check_files_in_dir(
         &self,
         dir: &Path,
+        exclude_paths: Vec<PathBuf>,
     ) -> Result<Vec<Issue>, Vec<(std::path::PathBuf, io::Error)>> {
         let mut all_issues = Vec::new();
 
-        let result = self.travel_dir(dir, |path| match fs::read_to_string(path) {
+        let result = self.travel_dir(dir, exclude_paths, |path| match fs::read_to_string(path) {
             Ok(content) => {
                 let issues = self.check(path.to_str().unwrap(), &content);
                 all_issues.extend(issues);
@@ -35,8 +36,9 @@ impl<'a> Linter<'a> {
     pub fn format_files_in_dir(
         &self,
         dir: &Path,
+        exclude_paths: Vec<PathBuf>,
     ) -> Result<(), Vec<(std::path::PathBuf, io::Error)>> {
-        self.travel_dir(dir, |path| match fs::read_to_string(path) {
+        self.travel_dir(dir, exclude_paths, |path| match fs::read_to_string(path) {
             Ok(content) => {
                 let formatted_content = self.format(&content);
                 if formatted_content != content {
@@ -52,6 +54,7 @@ impl<'a> Linter<'a> {
     fn travel_dir<F>(
         &self,
         dir: &Path,
+        exclude_paths: Vec<PathBuf>,
         mut file_handler: F,
     ) -> Result<(), Vec<(std::path::PathBuf, io::Error)>>
     where
@@ -73,6 +76,15 @@ impl<'a> Linter<'a> {
         for entry in walker {
             match entry {
                 Ok(entry) => {
+                    let path = entry.path();
+
+                    if exclude_paths
+                        .iter()
+                        .any(|ex| path.starts_with(ex.as_path()))
+                    {
+                        continue;
+                    }
+
                     if entry
                         .path()
                         .components()
@@ -103,7 +115,7 @@ impl<'a> Linter<'a> {
                     } else {
                         continue;
                     }
-
+                    
                     if entry.file_type().map_or(false, |ft| ft.is_file()) {
                         if let Err(e) = file_handler(entry.path()) {
                             errors.push((entry.path().to_path_buf(), e));

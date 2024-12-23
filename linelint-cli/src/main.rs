@@ -1,13 +1,13 @@
-use clap::Command;
+use clap::{Arg, Command};
 use linelint::config::Config;
 use linelint::line::LineEnding;
 use linelint::linter::Linter;
 use linelint::rule::line_end_lint::LineEndLint;
 use linelint::rule::trailing_ws_lint::TrailingWhitespaceLint;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
-fn check(current_dir: &Path, linter: &Linter) {
-    match linter.check_files_in_dir(current_dir) {
+fn check(current_dir: &Path, exclude_paths: Vec<PathBuf>, linter: &Linter) {
+    match linter.check_files_in_dir(current_dir, exclude_paths) {
         Ok(issues) => {
             if issues.is_empty() {
                 println!("No issues found.");
@@ -29,8 +29,8 @@ fn check(current_dir: &Path, linter: &Linter) {
     }
 }
 
-fn format(current_dir: &Path, linter: &Linter) {
-    match linter.format_files_in_dir(current_dir) {
+fn format(current_dir: &Path, exclude_paths: Vec<PathBuf>, linter: &Linter) {
+    match linter.format_files_in_dir(current_dir, exclude_paths) {
         Ok(_) => println!("Files formatted successfully."),
         Err(errors) => {
             for e in errors {
@@ -44,8 +44,26 @@ fn main() {
     let matches = Command::new("linelint-cli")
         .version("0.0.2")
         .about("A command-line tool for linting and fixing line formatting issues")
-        .subcommand(Command::new("check").about("Check files for lint issues"))
-        .subcommand(Command::new("format").about("Automatically format files to fix lint issues"))
+        .subcommand(
+            Command::new("check")
+                .about("Check files for lint issues")
+                .arg(
+                    Arg::new("exclude")
+                        .long("exclude")
+                        .short('e')
+                        .help("Exclude files or directories for check"),
+                ),
+        )
+        .subcommand(
+            Command::new("format")
+                .about("Automatically format files to fix lint issues")
+                .arg(
+                    Arg::new("exclude")
+                        .long("exclude")
+                        .short('e')
+                        .help("Exclude files or directories for check"),
+                ),
+        )
         .get_matches();
 
     let current_dir = std::env::current_dir().expect("Failed to get current directory");
@@ -58,10 +76,22 @@ fn main() {
 
     if matches.subcommand().is_none() {
         println!("No subcommand provided, defaulting to 'check'...");
-        check(&current_dir, &linter);
-    } else if matches.subcommand_matches("check").is_some() {
-        check(&current_dir, &linter);
-    } else if matches.subcommand_matches("format").is_some() {
-        format(&current_dir, &linter);
+        check(&current_dir, vec![], &linter);
+    } else if let Some(check_match) = matches.subcommand_matches("check") {
+        let ex = check_match.get_one::<String>("exclude");
+        let exclude_paths: Vec<PathBuf> = if let Some(ex) = ex {
+            ex.split(',').map(|s| current_dir.join(s)).collect()
+        } else {
+            vec![]
+        };
+        check(&current_dir, exclude_paths, &linter);
+    } else if let Some(format_match) = matches.subcommand_matches("format") {
+        let ex = format_match.get_one::<String>("exclude");
+        let exclude_paths: Vec<PathBuf> = if let Some(ex) = ex {
+            ex.split(',').map(|s| current_dir.join(s)).collect()
+        } else {
+            vec![]
+        };
+        format(&current_dir, exclude_paths, &linter);
     }
 }
